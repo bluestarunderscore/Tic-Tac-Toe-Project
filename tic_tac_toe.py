@@ -2,7 +2,8 @@ import socket
 import PySimpleGUI as ui
 ###############################################################
 # Tic Tac Toe for CS361 Winter 2024
-# run with "python tic_tac_toe.py"
+# run with "python tic_tac_toe.py" in command line, or double-
+# click the file.
 #
 ###############################################################
 
@@ -11,15 +12,16 @@ import PySimpleGUI as ui
 #
 ###############################################################
 
-# Fonts
+# Global font variables
 title_font = ("Times New Roman", 26)
 default_font = ("Arial", 12)
 larger_font = ("Arial", 18)
 
+# Global option variables
 is_large_font = 0
 is_high_contrast = 0
 
-# Default value for font
+# Global default font
 main_font = default_font
 
 # Swap out fonts upon window reload
@@ -93,6 +95,8 @@ def create_game_window():
 
 #TODO: Refactor for less "elif" spam (may improve efficiency)
 def main_loop():
+
+    #Use global variables to allow proper usage.
     global main_font
     global default_font
     global larger_font
@@ -103,9 +107,12 @@ def main_loop():
     options = None
     game = None
     print('CLIENT: Created main window')
-    
+
+    #Begin main loop.
     while True:
+        #Get every window loaded (do this every time to apply font size and (contrast NYI) changes)
         window, event, values = ui.read_all_windows()
+        
         # Exiting the game with X
         if event == ui.WIN_CLOSED:
             break
@@ -130,19 +137,20 @@ def main_loop():
                 print('CLIENT: Request for', file_name, 'sent to microservice (NYI)')
             else:
                 print('CLIENT: Request to load canceled.')
-                
+
+        # Display tutorial
         elif event == 'Tutorial':
             print('CLIENT: Showing tutorial')
             ui.popup('To play tic-tac-toe, click one of the buttons on the 3x3 board to place an X. The opponent (computer) will place an O.',
                      'Try to get three in a row before the enemy does, or force a draw!', font = main_font)
 
-        
+        # Open the options menu
         elif event == 'Options':
             print('CLIENT: Opened the options menu')
             title.hide()
             options = create_options_window()
 
-        # Exiting with Exit Game button
+        # Exit the game, confirming choice first
         elif event == 'Exit Game':
             if ui.popup_yes_no('Are you sure you want to exit the game?', font = main_font) == 'Yes':
                 print('CLIENT: Saving and exiting (NYI)')
@@ -153,10 +161,13 @@ def main_loop():
 #
 #
 #############################################################
+
+        # Change font size and update in command line log
         elif event == 'Large Font Size':
             toggle_font()
             print(str(is_large_font))
 
+        # Actually apply the changes
         elif event == 'Apply Changes':
             print('CLIENT: Applying setting changes')
             options.close()
@@ -165,7 +176,8 @@ def main_loop():
             title = create_main_window()
             print("CLIENT: Current Font:", main_font)
             #title.un_hide()
-        
+
+        # Return to the main menu without updating
         elif event == 'Back to Main Menu':
             print('CLIENT: Saving and quitting to title')
             options.close()
@@ -177,17 +189,16 @@ def main_loop():
 #
 #
 #############################################################
+
+# NOTE: THIS SECTION IS INCOMPLETE, AND IS NOT PART OF MILESTONE 1'S FEATURE SET.
+
+        # Quit the game and return to the main menu.
         elif event == 'Quit':
             if ui.popup_yes_no('Are you sure you want to quit this game?', font=main_font) == 'Yes':
                 print('CLIENT: Saving and quitting to title (Saving NYI)')
                 game.close()
                 game = None
                 title.un_hide()
-    
-
-    #title.close()
-
-
 main_loop()
 
     
