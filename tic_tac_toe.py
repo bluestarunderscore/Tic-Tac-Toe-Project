@@ -207,6 +207,7 @@ def main_loop():
             board = [ ['N','N','N'],
                     ['N','N','N'],
                     ['N','N','N']]
+            is_opponent_turn = 0
             title.hide()
             game = create_game_window()
          
@@ -312,6 +313,10 @@ def main_loop():
                 window[opponent_turn].update("O")
                 if is_in_game and is_winning_board(board, is_opponent_turn):
                         print("Winning board")
+                        opponent_whitelist = ['00','01','02','10','11','12','20','21','22']
+                        board = [ ['N','N','N'],
+                                  ['N','N','N'],
+                                  ['N','N','N']]
                         is_in_game = 0
                 is_opponent_turn = 0
                 window.refresh()
