@@ -75,13 +75,20 @@ def create_options_layout():
                    [ui.Button('Back to Main Menu', font = main_font)]]
     return options_layout
 
-def create_game_layout():
+def create_game_layout(current_state):
     global player_wins
     global computer_wins
-    game_layout = [[ui.Text('Wins: ' + str(player_wins), font= main_font, key='wins'), ui.Text('Losses: ' + str(computer_wins), font = main_font, key='losses')],
-               [ui.Button('', font = main_font, size=(6,3), key='00'), ui.Button('', font = main_font, size=(6,3), key='01'), ui.Button('', font = main_font, size=(6,3), key='02')],
-               [ui.Button('', font = main_font, size=(6,3), key='10'), ui.Button('', font = main_font, size=(6,3), key='11'), ui.Button('', font = main_font, size=(6,3), key='12')],
-               [ui.Button('', font = main_font, size=(6,3), key='20'), ui.Button('', font = main_font, size=(6,3), key='21'), ui.Button('', font = main_font, size=(6,3), key='22')],
+    game_layout = [[ui.Text('Wins: ' + str(current_state["player_1_score"]), font= main_font, key='wins'),
+                    ui.Text('Losses: ' + str(current_state["player_2_score"]), font = main_font, key='losses')],
+               [ui.Button('' if current_state["board"][0][0] == 'N' else current_state["board"][0][0], font = main_font, size=(6,3), key='00'),
+                ui.Button('' if current_state["board"][0][1] == 'N' else current_state["board"][0][1], font = main_font, size=(6,3), key='01'),
+                ui.Button('' if current_state["board"][0][2] == 'N' else current_state["board"][0][2], font = main_font, size=(6,3), key='02')],
+               [ui.Button('' if current_state["board"][1][0] == 'N' else current_state["board"][1][0], font = main_font, size=(6,3), key='10'),
+                ui.Button('' if current_state["board"][1][1] == 'N' else current_state["board"][1][1], font = main_font, size=(6,3), key='11'),
+                ui.Button('' if current_state["board"][1][2] == 'N' else current_state["board"][1][2], font = main_font, size=(6,3), key='12')],
+               [ui.Button('' if current_state["board"][2][0] == 'N' else current_state["board"][2][0], font = main_font, size=(6,3), key='20'),
+                ui.Button('' if current_state["board"][2][1] == 'N' else current_state["board"][2][1], font = main_font, size=(6,3), key='21'),
+                ui.Button('' if current_state["board"][2][2] == 'N' else current_state["board"][2][2], font = main_font, size=(6,3), key='22')],
                [ui.Button('Save', font = main_font, size=(6,1)), ui.Button('Load', font = main_font, size=(6,1)), ui.Button('Quit', font = main_font, size=(6,1))]]
     return game_layout
 
@@ -101,17 +108,18 @@ def create_options_window():
     options_window = ui.Window('Tic-Tac-Toe - Options', options_layout, size = (600,400), element_justification = 'c', finalize = True)
     return options_window
 
-def create_game_window():
-    game_layout = create_game_layout()
+def create_game_window(current_state):
+    game_layout = create_game_layout(current_state)
     game_window = ui.Window('Tic-Tac-Toe - In Play', game_layout, size = (600,400), element_justification = 'c', finalize = True)
     return game_window
 
 # Convoluted way of determining if a winning play has occurred. 
 # Returns true if any winning board condition is present, otherwise false.
 # 14 Lines.
-def is_winning_board(board, is_opponent_turn):
+def is_winning_board(board, is_opponent_turn, ui):
     global player_wins
     global computer_wins
+    global main_font
     print(board)
     row_0 = board[0][0] != 'N' and board[0][0] == board[0][1] and board[0][0] == board[0][2]
     row_1 = board[1][0] != 'N' and board[1][0] == board[1][1] and board[1][0] == board[1][2]
@@ -126,6 +134,7 @@ def is_winning_board(board, is_opponent_turn):
 
     if row_0 or row_1 or row_2 or col_0 or col_1 or col_2 or diag_down or diag_up:
         print("CLIENT: Winning board detected for player ID", is_opponent_turn, "\nNOTE: Player ID 0 is the player, ID 1 is computer")
+        win_lose_popup(ui, main_font)
         if is_opponent_turn == 0:
             player_wins += 1
         else:
@@ -139,6 +148,8 @@ def is_winning_board(board, is_opponent_turn):
 #
 #  
 #############################################################
+
+# Saves the game state in the format the microservice requires.
 def save_game(sending_socket, current_state):
     global player_wins
     global computer_wins
@@ -148,7 +159,9 @@ def save_game(sending_socket, current_state):
     sendable_cmd = pickle.dumps(save_parameters)
     sending_socket.sendall(sendable_cmd)
 
-def load_game(sending_socket, file_name, current_state, board):
+# Loads a game state from a file.
+# Returns: Game state as a dict.
+def load_game(sending_socket, file_name, current_state):
     global player_wins
     global computer_wins
     load_parameters = {"command": "load",
@@ -157,7 +170,9 @@ def load_game(sending_socket, file_name, current_state, board):
     sending_socket.sendall(sendable_cmd)
     recv_state = sending_socket.recv(1024)
     current_state = pickle.loads(recv_state)
+    return current_state
 
+#TODO: Detect which player won
 def win_lose_popup(ui, main_font):
     ui.popup('A player has won.', font = main_font)
     
@@ -192,9 +207,8 @@ def main_loop(sending_socket):
     
     is_in_game = 0
     is_opponent_turn = 0
-    player_1_score = 0
-    player_2_score = 0
     previous_font = default_font
+    update_on_next_pass = 0
 
     print('CLIENT: Welcome to the Tic-Tac-Toe logs!')
     title = create_main_window()
@@ -206,12 +220,26 @@ def main_loop(sending_socket):
     while True:
         #Get every window loaded (do this every time to apply font size change immediately)
         window, event, values = ui.read_all_windows()
+
+        #TODO: UPDATE UI WITH PLAYED CONDITIONS
+        #print(opponent_whitelist)
+        if update_on_next_pass:
+            update_on_next_pass = 0
+            for i in range (0,3):
+                for j in range(0,3):
+                    board[i][j] = current_state["board"][i][j]
+                    if current_state["board"][i][j] != 'N' and str(i) + str(j) in opponent_whitelist:
+                        opponent_whitelist.remove(str(i) + str(j))
+                        print("Removed a tile")
+            
+            continue
+            
         if event == ui.WIN_CLOSED:
             break
 
         elif event == 'Quit':
-                if ui.popup_yes_no('Are you sure you want to quit this game?', font=main_font) == 'Yes':
-                    print('CLIENT: Saving and quitting to title (Saving NYI)')
+                if ui.popup_yes_no('Are you sure you want to quit this game? Progress will NOT save unless you save first.', font=main_font) == 'Yes':
+                    print('CLIENT: Saving and quitting to title')
                     is_in_game = 0
                     game.close()
                     game = None
@@ -226,39 +254,47 @@ def main_loop(sending_socket):
         elif event == 'New Game':
             print('CLIENT: Starting new game')
             is_in_game = 1
+            player_wins = 0
+            computer_wins = 0
             opponent_whitelist = ['00','01','02','10','11','12','20','21','22']
             board = [ ['N','N','N'],
                     ['N','N','N'],
                     ['N','N','N']]
+            current_state["board"] = board
             is_opponent_turn = 0
             title.hide()
-            game = create_game_window()
+            game = create_game_window(current_state)
          
         # TODO: Load the game (from either main menu or game board) microservice
         elif event == 'Save Game' or event == 'Save':
             print('CLIENT: Request to save game received')
+            
+            current_state["board"] = board
             save_game(sending_socket, current_state)
-            print('CLIENT: Saved state to save_game.txt')
+            
+            print('CLIENT: Saved state to save_game.txt as follows:\n', current_state)
         
         elif event == 'Load Game' or event == 'Load':
             print('CLIENT: Request to load game started...')
             file_name = ui.popup_get_file('Enter the save file name, or browse for it on your computer.', font=main_font)
             if file_name is not None:
                 print('CLIENT: Request for', file_name, 'sent to microservice.')
-                load_game(sending_socket, file_name, current_state, board)
+                current_state = load_game(sending_socket, file_name, current_state)
                 print('State loaded as follows:\n', current_state)
-                
+                board = current_state["board"]
                 is_in_game = 1
-                for i in range (len(board)-1):
-                    for j in range(i):
-                        board[i][j] = current_state["board"][i][j]
-                        if str(i) + str(j) in opponent_whitelist:
-                               opponent_whitelist.remove(str(i) + str(j))
-                               
-                #opponent_whitelist = ['00','01','02','10','11','12','20','21','22']
+
+                if event == 'Load Game':
+                    title.hide()
+                    game = create_game_window(current_state)
+                else:
+                    game.close()
+                    game = None
+                    game = create_game_window(current_state)
+                
                 is_opponent_turn = 0
-                title.hide()
-                game = create_game_window()
+                update_on_next_pass = 1
+                
             else:
                 print('CLIENT: Request to load canceled.')
 
@@ -274,7 +310,12 @@ def main_loop(sending_socket):
 
         elif event == 'Exit Game':
             if ui.popup_yes_no('Are you sure you want to exit the game?', font = main_font) == 'Yes':
-                print('CLIENT: Saving and exiting (NYI)')
+                print('CLIENT: Closing microservice connection and closing')
+
+                # Close the microservice so it doesn't hang or crash
+                close_cmd = {"command": "close"}
+                sendable_cmd = pickle.dumps(close_cmd)
+                sending_socket.sendall(sendable_cmd)
                 exit()
 
 #############################################################
@@ -307,8 +348,8 @@ def main_loop(sending_socket):
 #
 #############################################################
 
-# TODO: Game Logic
         # Track player-pressed buttons and remove them from the list of valid buttons for the computer to play on.
+        # First, store the current state for on-demand saving if necessary.
         current_state = {"player_1_score": player_wins,
             "player_2_score": computer_wins,
             "board": [
@@ -316,13 +357,15 @@ def main_loop(sending_socket):
                 [board[1][0], board[1][1], board[1][2]],
                 [board[2][0], board[2][1], board[2][2]]
                 ]}
+
+        # Player Turn
         if is_in_game == 1 and is_opponent_turn == 0:
             if event != 'Quit' and event != 'Load' and event != 'Save':
                 if event in opponent_whitelist:
                     board[int(event[0])][int(event[1])] = 'X'
                     window[event].update("X")
                     opponent_whitelist.remove(event)
-                    if is_in_game and is_winning_board(board, is_opponent_turn):
+                    if is_in_game and is_winning_board(board, is_opponent_turn, ui):
                         is_in_game = 0
                     is_opponent_turn = 1
 
@@ -334,7 +377,8 @@ def main_loop(sending_socket):
                     game.close()
                     game = None
                     title.un_hide()
-        
+                    
+        # Opponent Turn
         if is_in_game == 1 and is_opponent_turn == 1:
             opponent_turn = get_opponent_turn(opponent_whitelist)
             if opponent_turn == -1:
@@ -350,13 +394,12 @@ def main_loop(sending_socket):
             else:
                 board[int(opponent_turn[0])][int(opponent_turn[1])] = 'O'
                 window[opponent_turn].update("O")
-                if is_in_game and is_winning_board(board, is_opponent_turn):
+                if is_in_game and is_winning_board(board, is_opponent_turn, ui):
                         opponent_whitelist = ['00','01','02','10','11','12','20','21','22']
                         board = [ ['N','N','N'],
                                   ['N','N','N'],
                                   ['N','N','N']]
                         is_in_game = 0
-                        win_lose_popup(ui, main_font)
                 is_opponent_turn = 0
                 window.refresh()
 
@@ -368,12 +411,14 @@ def main_loop(sending_socket):
                     game.close()
                     game = None
                     title.un_hide()
+# 7 Lines.
 def main():
     connection_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     connection_socket.bind(("127.0.0.1", 61000))
     connection_socket.listen()
+    print("CLIENT: Waiting for microservice to start executing....")
     sending_socket, addr = connection_socket.accept()
-    print("[CLIENT] Connected to microservice on LOCALHOST:61000")
+    print("CLIENT: Connected to microservice on LOCALHOST:61000")
     main_loop(sending_socket)
 
 if __name__ == "__main__":
